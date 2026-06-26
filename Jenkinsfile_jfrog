@@ -1,0 +1,133 @@
+@Library('my-shared-library') _
+
+pipeline{
+
+    agent any
+
+    parameters{
+
+        choice(name: 'action', choices: 'create\ndelete', description: 'Choose create/Destroy')
+        string(name: 'ImageName', description: "name of the docker build", defaultValue: 'javapp')
+        string(name: 'ImageTag', description: "tag of the docker build", defaultValue: 'v1')
+        string(name: 'DockerHubUser', description: "name of the Application", defaultValue: 'rkg410')
+        string(name: 'jfrogUrl', description: "Base URL of JFrog (e.g., http://44.202.242.34:8082)", defaultValue: 'http://')
+        string(name: 'jfrogRepo', description: "name of the repo created in jfrog", defaultValue: 'example-repo-local')
+        string(name: 'jfrogUserName', description: "username of jfrog", defaultValue: 'admin')
+        string(name: 'jfrogToken', description: "token of jfrog", defaultValue: 'password')
+        
+    }
+
+    stages{
+         
+        stage('Git Checkout'){
+                    when { expression {  params.action == 'create' } }
+            steps{
+            gitCheckout(
+                branch: "main",
+                url: "https://github.com/ravi1003/java.git"
+            )
+            }
+        }
+         stage('Unit Test maven'){
+         
+         when { expression {  params.action == 'create' } }
+
+            steps{
+               script{
+                   
+                   mvnTest()
+               }
+            }
+        }
+         stage('Integration Test maven'){
+         when { expression {  params.action == 'create' } }
+            steps{
+               script{
+                   
+                   mvnIntegrationTest()
+               }
+            }
+        }
+        stage('Static code analysis: Sonarqube'){
+         when { expression {  params.action == 'create' } }
+            steps{
+               script{
+                   
+                   def SonarQubecredentialsId = 'sonarqube-api'
+                   statiCodeAnalysis(SonarQubecredentialsId)
+               }
+            }
+       }
+       stage('Quality Gate Status Check : Sonarqube'){
+         when { expression {  params.action == 'create' } }
+            steps{
+               script{
+                   
+                   def SonarQubecredentialsId = 'sonarqube-api'
+                   QualityGateStatus(SonarQubecredentialsId)
+               }
+            }
+       }
+        stage('Maven Build : maven'){
+         when { expression {  params.action == 'create' } }
+            steps{
+               script{
+                   
+                   mvnBuild()
+               }
+            }
+        }
+        stage('Build and Add Artifact to the repo : JFrog'){
+         when { expression {  params.action == 'create' } }
+            steps {
+                script {
+                    def jfrogUploadUrl = "${params.jfrogUrl}/artifactory/${params.jfrogRepo}/"                 
+                    echo "Uploading all jars to JFrog at ${jfrogUploadUrl}"
+                    sh """
+                        cd target
+                        for jar in *.jar; do
+                            echo "Uploading \$jar..."
+                            curl -X PUT -H "Authorization: Bearer ${params.jfrogToken}" -T "\$jar" "${jfrogUploadUrl}"
+                        done
+                    """
+                }
+            }
+        }
+        stage('Docker Image Build'){
+         when { expression {  params.action == 'create' } }
+            steps{
+               script{
+                   
+                   dockerBuild("${params.ImageName}","${params.ImageTag}","${params.DockerHubUser}")
+               }
+            }
+        }
+         stage('Docker Image Scan: trivy '){
+         when { expression {  params.action == 'create' } }
+            steps{
+               script{
+                   
+                   dockerImageScan("${params.ImageName}","${params.ImageTag}","${params.DockerHubUser}")
+               }
+            }
+        }
+        stage('Docker Image Push : DockerHub '){
+         when { expression {  params.action == 'create' } }
+            steps{
+               script{
+                   
+                   dockerImagePush("${params.ImageName}","${params.ImageTag}","${params.DockerHubUser}")
+               }
+            }
+        }   
+        stage('Docker Image Cleanup : DockerHub '){
+         when { expression {  params.action == 'create' } }
+            steps{
+               script{
+                   
+                   dockerImageCleanup("${params.ImageName}","${params.ImageTag}","${params.DockerHubUser}")
+               }
+            }
+        }      
+    }
+}
