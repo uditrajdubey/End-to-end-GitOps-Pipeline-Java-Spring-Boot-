@@ -24,7 +24,8 @@ pipeline{
             steps{
             gitCheckout(
                 branch: "main",
-                url: "https://github.com/uditrajdubey/Java_project_by_evision_16.git"
+                url: "https://github.com/uditrajdubey/End-to-end-GitOps-Pipeline-Java-Spring-Boot-
+.git"
             )
             }
         }
@@ -132,7 +133,7 @@ pipeline{
        stage('Update Deployment File') {
         when { expression {  params.action == 'create' } }
         environment {
-            GIT_REPO_NAME = "Java_project_by_evision_16"
+            GIT_REPO_NAME = "End-to-end-GitOps-Pipeline-Java-Spring-Boot-"
             GIT_USER_NAME = "uditrajdubey"
         }
         steps {
